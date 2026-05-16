@@ -1,8 +1,13 @@
-from pydantic import BaseModel, Field
+from typing import Annotated
+from pydantic import BaseModel, Field, StringConstraints
+
 
 
 class DepartmentCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=200, str_strip=True)
+    name: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
+    ]
     parent_id: int | None = None
 
 
