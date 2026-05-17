@@ -1,6 +1,6 @@
 # HR Management Service
 
-A production-ready, asynchronous microservice for managing hierarchical department trees and employee assignments. Built with **FastAPI**, **SQLAlchemy 2.0 (Classical Imperative Mapping)**, and **PostgreSQL**, following the strict guidelines of **Clean Architecture** and Domain-Driven Design (DDD).
+A production-ready, asynchronous microservice for managing hierarchical department trees and employee assignments. Built with **FastAPI**, **SQLAlchemy 2.0 (Classical Imperative Mapping)**, and **PostgreSQL**, following the principles of **Clean Layered Architecture** and Domain-Driven Design (DDD).
 
 [![Code Style: Black](https://shields.io)](https://github.com)
 [![Imports: isort](https://shields.io)](https://github.io)
@@ -10,7 +10,7 @@ A production-ready, asynchronous microservice for managing hierarchical departme
 
 ## 🏗️ Architectural Blueprint
 
-The codebase is strictly separated into independent layers in accordance with Harry Percival's *"Architecture Patterns with Python"* (Cosmic Python):
+The codebase is strictly separated into independent layers to isolate business logic from frameworks and infrastructure:
 
 ```text
     ┌─────────────────────────────────────────────────────────┐
@@ -31,33 +31,17 @@ The codebase is strictly separated into independent layers in accordance with Ha
     ┌────────────────────────────▼────────────────────────────┐
     │                       Domain Model                      │
     │         (Pure Python Dataclasses / Enterprise Rules)     │
-    └─────────────────────────────────────────────────────────┘
+    └─────────────────────────── ─────────────────────────────┘
 ```
 
-### Core Architecture Components:
-*   **Domain Model (`src/models/`)**: Pure Python dataclasses completely isolated from any database or framework concerns. All business rules (e.g., string trimming, non-empty text validation) are encapsulated directly within the entities' `__post_init__`.
-*   **Data Access Layer (`src/adapters/`)**: 
-    *   *Classical Imperative Mapping*: Implemented using SQLAlchemy 2.0's `registry.map_imperatively`, mapping standard db tables onto the domain objects without bleeding database decorators into the domain code.
-    *   *Repository Pattern*: Abstracts database interaction away from the business layer.
-*   **Service Layer & Unit of Work (`src/services/`)**: Orchestrates transactions and coordinates atomicity. Service functions are completely agnostic of the real DB driver. Tree pruning, name uniqueness inside a specific node, and cyclic dependency prevention rules are handled here.
-
----
-
-## 🛠️ Tech Stack & Code Quality
-
-*   **Runtime**: Python 3.12 / FastAPI (utilizing modern `lifespan` context manager)
-*   **Database Stack**: PostgreSQL 15 + `asyncpg` (Fully asynchronous CRUD operations)
-*   **Migrations**: Asynchronous Alembic workflow (`alembic init -t async`)
-*   **Quality Gates**:
-    *   **Strict PEP 8 enforcement**: Lines limited strictly to **79 characters**.
-    *   Formatters: `black --line-length=79`, `isort`.
-    *   Linter: `flake8` clean configuration (0 errors, 0 warnings).
+### Layer Responsibilities:
+*   **Domain Model (`src/models/`)**: Pure Python dataclasses completely isolated from data access concerns. All core enterprise rules (e.g., automatic string trimming, non-empty validation) are encapsulated inside the entities' `__post_init__`.
+*   **Data Access Layer (`src/adapters/`)**: Implements the Repository pattern and classical imperative mapping (`registry.map_imperatively`) to keep entities untainted by database logic.
+*   **Service Layer & Unit of Work (`src/services/`)**: Orchestrates atomic operations, enforces unique constraints within a specific hierarchy level, and runs the recursive protection check against cyclic dependencies.
 
 ---
 
 ## ⚡ Quick Start & Deployment
-
-The infrastructure is fully dockerized with embedded database healthchecks ensuring proper orchestration sequence.
 
 ### Prerequisites
 Create a `.env` file in the root directory:
@@ -67,35 +51,108 @@ DB_PASSWORD=postgres
 DB_NAME=hr_db
 ```
 
-### Production Up & Build
-Run the following command to bootstrap the database container, execute asynchronous Alembic migrations, and spin up the ASGI app server:
+### Production Bootstrap
+Run the following command to spin up the database container, automatically apply asynchronous Alembic migrations, and start the app server:
 ```bash
 docker compose up --build
 ```
 
-Once initialized, the API Interactive Documentation will be fully available at:
+Once initialized, the Interactive OpenAPI Documentation will be fully available at:
 👉 **http://localhost:8000/docs** (Swagger UI)
 
 ---
 
-## 🧪 Testing Strategy
+## 🕹️ API Usage Examples & Core Workflows
 
-The project contains a test suite covering domain components, API schemas, and End-to-End database workflows. E2E execution hooks into an isolated asynchronous routine, triggering state truncations (`TRUNCATE ... CASCADE`) between individual test tasks to prevent side-effects.
+Below are standard HTTP execution flows covering all specific business rules defined in the service requirements.
 
-To run the full test suite locally within your activated virtual environment:
+### 1. Create a Root Department
+*   **HTTP Method**: `POST /departments/`
+*   **Payload**:
+    ```json
+    {
+      "name": "   HQ Department   "
+    }
+    ```
+*   **Business Behavior**: Input strings are automatically whitespace-trimmed. Returns `201 Created` with `id: 1` and `name: "HQ Department"`. Sending the exact same request again will trigger a validation gate and return a `409 Conflict`.
+
+### 2. Create a Sub-Department
+*   **HTTP Method**: `POST /departments/`
+*   **Payload** (linking to the parent created above):
+    ```json
+    {
+      "name": "Engineering",
+      "parent_id": 1
+    }
+    ```
+
+### 3. Add an Employee to a Department
+*   **HTTP Method**: `POST /departments/2/employees/`
+*   **Payload**:
+    ```json
+    {
+      "full_name": "  Legolas Greenleaf  ",
+      "position": "Senior Core Dev",
+      "hired_at": "2026-05-17"
+    }
+    ```
+*   **Business Behavior**: `full_name` and `position` are automatically stripped of extra spaces. Returns `201 Created`. Sending an assignment to a non-existent department ID will throw a `404 Not Found`.
+
+### 4. Fetch Hierarchical Tree (with Depth Control)
+*   **HTTP Method**: `GET /departments/1?depth=2&include_employees=true`
+*   **Response (`200 OK`)**:
+    ```json
+    {
+      "id": 1,
+      "name": "HQ Department",
+      "parent_id": null,
+      "created_at": "2026-05-17T21:40:00",
+      "employees": [],
+      "children": [
+        {
+          "id": 2,
+          "name": "Engineering",
+          "parent_id": 1,
+          "created_at": "2026-05-17T21:42:00",
+          "employees": [
+            {
+              "id": 1,
+              "department_id": 2,
+              "full_name": "Legolas Greenleaf",
+              "position": "Senior Core Dev",
+              "hired_at": "2026-05-17",
+              "created_at": "2026-05-17T21:45:00"
+            }
+          ],
+          "children": []
+        }
+      ]
+    }
+    ```
+*   **Business Behavior**: The tree size is calculated dynamically in memory. Specifying `depth=1` automatically prunes lower levels, returning an empty `children` array for node 1.
+
+### 5. Prevent Cyclic Dependencies (PATCH)
+*   **HTTP Method**: `PATCH /departments/1`
+*   **Payload** (trying to move parent node `1` inside its child node `2`):
+    ```json
+    {
+      "parent_id": 2
+    }
+    ```
+*   **Business Behavior**: The service intercepts the transaction, traces the tree graph upwards, blocks the modification, and outputs a `409 Conflict` containing `"Cyclic dependency detected"`.
+
+### 6. Delete Department with Employee Reassignment
+*   **HTTP Method**: `DELETE /departments/2?mode=reassign&reassign_to_department_id=1`
+*   **Business Behavior**: Removes the "Engineering" node (`2`) but bulk-transfers Legolas directly to the "HQ Department" (`1`). Returns `204 No Content`.
+*   **Alternative (`mode=cascade`)**: Running `DELETE /departments/1?mode=cascade` drops the entire node structure alongside all inner employee relations instantly.
+
+---
+
+## 🧪 Running Tests
+
+The test suite runs asynchronous execution routines, applying strict database table isolation hooks (`TRUNCATE ... CASCADE`) between individual tasks to prevent side-effects.
+
+Execute tests locally via your activated virtual environment shell:
 ```bash
 python -m pytest
-```
-
-### Test Suite Execution Output:
-```text
-collected 36 items
-
-tests/e2e/test_departments.py .                                          [ 11%]
-tests/unit/api/test_department_schemas.py .......                        [ 30%]
-tests/unit/api/test_employee_schemas.py ...............                  [ 72%]
-tests/unit/domain/test_model_department.py .....                         [ 86%]
-tests/unit/domain/test_model_employee.py .....                           [100%]
-
-========================== 36 passed in 1.15s ==========================
 ```
