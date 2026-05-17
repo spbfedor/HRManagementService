@@ -1,5 +1,6 @@
-import pytest
 from datetime import date, datetime
+
+import pytest
 
 from src.models import Employee
 
@@ -12,7 +13,7 @@ def test_create_employee_entity():
         full_name="Frodo Baggins",
         position="manager",
         hired_at=date.today(),
-        created_at=now
+        created_at=now,
     )
     assert employee.id == 1
     assert employee.department_id == 1
@@ -23,13 +24,13 @@ def test_create_employee_entity():
 
 
 @pytest.mark.parametrize(
-        "full_name, position, excepted_error",
-        [
-            ("", "manager", "The 'full_name' field cannot be empty"),
-            ("    ", "manager", "The 'full_name' field cannot be empty"),
-            ("Frodo Baggins", "", "The 'position' field cannot be empty"),
-            ("Frodo Baggins", "   ", "The 'position' field cannot be empty")
-        ]
+    "full_name, position, excepted_error",
+    [
+        ("", "manager", "The 'full_name' field cannot be empty"),
+        ("    ", "manager", "The 'full_name' field cannot be empty"),
+        ("Frodo Baggins", "", "The 'position' field cannot be empty"),
+        ("Frodo Baggins", "   ", "The 'position' field cannot be empty"),
+    ],
 )
 def test_employee_validation_errors(full_name, position, excepted_error):
     with pytest.raises(ValueError) as ex:

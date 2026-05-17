@@ -1,0 +1,26 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Python мусор
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Секреты (в образ .env не кладем, прокидываем через compose)
+.env
+
+# Документация и логи
+README.md
+*.log
+tests/
